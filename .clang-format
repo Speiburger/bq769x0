@@ -1,0 +1,36 @@
+# Requires clang-format >= 17 (AlignAfterOpenBracket: BlockIndent needs >= 15,
+# the Macros option needs >= 17).
+BasedOnStyle: LLVM
+
+IndentWidth: 4
+ColumnLimit: 80
+ContinuationIndentWidth: 4
+
+# Pointers/refs bind to the name: `uint8_t *dataBuf`, not `uint8_t* dataBuf`.
+PointerAlignment: Right
+DerivePointerAlignment: false
+
+# `ret =`, struct field, and enumerator assignments line up in a block.
+AlignConsecutiveAssignments: true
+AlignTrailingComments: true
+AlignEscapedNewlines: Left
+
+BreakBeforeBraces: Attach
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakAfterReturnType: None
+IndentCaseLabels: true
+
+# Params/args: fit on one line, or one per line (never partially packed).
+AlignAfterOpenBracket: BlockIndent
+BinPackArguments: false
+BinPackParameters: false
+AllowAllParametersOfDeclarationOnNextLine: false
+AllowAllArgumentsOnNextLine: false
+
+MaxEmptyLinesToKeep: 1
+ReflowComments: true
+SortIncludes: true
+SpaceBeforeParens: ControlStatements
+Cpp11BracedListStyle: true
