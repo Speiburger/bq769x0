@@ -26,18 +26,29 @@ uint8_t bq769x0_crc(const uint8_t *data, size_t len) {
 
 /* Public functions*/
 
-// TODO: Doxygen comment
+/** \brief Read one or more registers over I2C
+ *
+ * Reads the requested registers from the chip via I2C and verifies each
+ * received byte against its accompanying CRC byte.
+ *
+ * \param handle I2C_HandleTypeDef used for the transfer
+ * \param registerAddress Address of the first register to read
+ * \param dataPtr Buffer to store the read data in
+ * \param length Number of registers to read
+ * \return BQ769X0_OK on success, error code otherwise
+ */
 bq769x0_ErrorCode_t bsp_bq769x0_readFunc(
     void *handle,
     uint8_t registerAddress,
     uint8_t *dataPtr,
     uint8_t length
 ) {
+    RROR;
     if ((handle == NULL) || (dataPtr == NULL)) {
         return BQ769X0_NULLPTR;
     }
     if (length < 1) {
-        return BQ769X0_ERROR;
+        return BQ769X0_E
     }
 
     I2C_HandleTypeDef *i2cHandle = (I2C_HandleTypeDef *)handle;
@@ -82,7 +93,17 @@ bq769x0_ErrorCode_t bsp_bq769x0_readFunc(
     return BQ769X0_OK;
 }
 
-// TODO: Doxygen comment
+/** \brief Write one or more registers over I2C
+ *
+ * Writes the given data to the chip via I2C, appending a CRC byte after each
+ * data byte as required by the protocol.
+ *
+ * \param handle I2C_HandleTypeDef used for the transfer
+ * \param registerAddress Address of the first register to write
+ * \param dataPtr Data to write
+ * \param length Number of registers to write
+ * \return BQ769X0_OK on success, error code otherwise
+ */
 bq769x0_ErrorCode_t bsp_bq769x0_writeFunc(
     void *handle,
     uint8_t registerAddress,
@@ -128,7 +149,15 @@ bq769x0_ErrorCode_t bsp_bq769x0_writeFunc(
     return BQ769X0_OK;
 }
 
-// TODO: Doxygen comment
+/** \brief Wake the chip from SHIP mode via the enable pin
+ *
+ * Toggles the chip enable pin with the delays required by the datasheet to
+ * bring the chip out of SHIP mode and ready it for the first voltage read.
+ *
+ * \param enPort Port of the chip enable pin
+ * \param enPin Pin number of the chip enable pin
+ * \return BQ769X0_OK on success, error code otherwise
+ */
 bq769x0_ErrorCode_t bsp_bq769x0_lowLevelInitFunc(void *enPort, uint16_t enPin) {
     GPIO_TypeDef *enPortGpio = (GPIO_TypeDef *)enPort;
 

@@ -5,6 +5,7 @@
 /* The BSP files are not part of the core project but instead provide a starting
  * point for developing the hardware specific code the driver needs to operate
  */
+1
 
 #ifndef BQ769X0_BSP_BQ769X0_C_H
 #define BQ769X0_BSP_BQ769X0_C_H
@@ -19,7 +20,9 @@
 #define BQ769X0_DELAY(delay) HAL_Delay(delay);
 #endif
 
-bq769x0_ErrorCode_t bsp_bq769x0_readFunc(
+#define BAT_I2C_ADDRESS 0x08
+
+    bq769x0_ErrorCode_t bsp_bq769x0_readFunc(
     void *handle,
     uint8_t registerAddress,
     uint8_t *dataPtr,

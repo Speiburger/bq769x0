@@ -17,9 +17,25 @@
 typedef enum {
     BQ769X0_OK      = 0, /**< No error*/
     BQ769X0_ERROR   = 1, /**< Generic error*/
-    BQ769X0_NULLPTR = 2,  /**< Function received a null pointer*/
+    BQ769X0_NULLPTR = 2, /**< Function received a null pointer*/
     BQ769X0_CRC     = 3  /**< Crc check failed*/
 } bq769x0_ErrorCode_t;
+
+#define BQ769X0_OV_TRIP_REG 0x09
+#define BQ769X0_UV_TRIP_REG 0x0A
+#define BQ769X0_ADC_GAIN1_REG 0x50
+#define BQ769X0_ADC_OFFSET_REG 0x51
+#define BQ769X0_ADC_GAIN2_REG 0x59
+
+#define BQ769X0_CHECK_NULLPTR(ptr) \
+    if (ptr == NULL) {             \
+        return BQ769X0_NULLPTR;    \
+    }
+
+#define BQ769X0_CHECK_RETVAL(ret) \
+    if (ret != BQ769X0_OK) {      \
+        return ret;               \
+    }
 
 typedef bq769x0_ErrorCode_t (*bq769x0_readPtr)(
     void *handle,
@@ -48,6 +64,9 @@ typedef struct {
     void *handle;
     void *enPort;
     uint16_t enPin;
+
+    uint16_t adcGain;
+    int8_t adcOffset;
 
     bool ready;
 } bq769x0_Ctx_t;
