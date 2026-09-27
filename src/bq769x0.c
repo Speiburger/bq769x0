@@ -64,11 +64,7 @@ bq769x0_setOvTrip(const bq769x0_Ctx_t *ctx, const uint32_t voltageMV) {
 
     /* Write the value to the register*/
     const uint8_t rawValue = (ovTripFull >> 4) & 0xFF;
-    const bq769x0_ErrorCode_t ret =
-        bq769x0_writeReg(ctx, BQ769X0_OV_TRIP_REG, &rawValue, 1);
-    BQ769X0_CHECK_RETVAL(ret);
-
-    return BQ769X0_OK;
+    return bq769x0_writeReg(ctx, BQ769X0_OV_TRIP_REG, &rawValue, 1);
 }
 
 /** \brief Set the undervoltage protection trip threshold
@@ -100,18 +96,60 @@ bq769x0_setUvTrip(const bq769x0_Ctx_t *ctx, const uint32_t voltageMV) {
 
     /* Write the value to the register*/
     const uint8_t rawValue = (uvTripFull >> 4) & 0xFF;
-    const bq769x0_ErrorCode_t ret =
-        bq769x0_writeReg(ctx, BQ769X0_UV_TRIP_REG, &rawValue, 1);
-    BQ769X0_CHECK_RETVAL(ret);
-
-    return BQ769X0_OK;
+    return bq769x0_writeReg(ctx, BQ769X0_UV_TRIP_REG, &rawValue, 1);
 }
 
-// TODO: Set UV / OV delay
+/** \brief Set the overvoltage protection delay
+ *
+ * Performs a read-modify-write of the PROTECT3 register to set the delay
+ * before the overvoltage protection trips.
+ *
+ * \param ctx Driver context
+ * \param delay Delay setting to apply
+ * \return BQ769X0_OK on success, error code otherwise
+ */
+static bq769x0_ErrorCode_t
+bq769x0_setOvDelay(const bq769x0_Ctx_t *ctx, bq769x0_OvDelay_t delay) {
+    /* Null pointer check*/
+    BQ769X0_CHECK_NULLPTR(ctx);
+
+    /* Perform read-modify-write of PROTECT3 register*/
+    uint8_t protect3;
+    bq769x0_ErrorCode_t ret =
+        bq769x0_readReg(ctx, BQ769X0_PROTECT3_REG, &protect3, 1);
+    BQ769X0_CHECK_RETVAL(ret);
+    protect3 &= ~(0x3 << 4);
+    protect3 |= (uint8_t)delay << 4;
+    return bq769x0_writeReg(ctx, BQ769X0_PROTECT3_REG, &protect3, 1);
+}
+
+/** \brief Set the undervoltage protection delay
+ *
+ * Performs a read-modify-write of the PROTECT3 register to set the delay
+ * before the undervoltage protection trips.
+ *
+ * \param ctx Driver context
+ * \param delay Delay setting to apply
+ * \return BQ769X0_OK on success, error code otherwise
+ */
+static bq769x0_ErrorCode_t
+bq769x0_setUvDelay(const bq769x0_Ctx_t *ctx, bq769x0_UvDelay_t delay) {
+    /* Null pointer check*/
+    BQ769X0_CHECK_NULLPTR(ctx);
+
+    /* Perform read-modify-write of PROTECT3 register*/
+    uint8_t protect3;
+    bq769x0_ErrorCode_t ret =
+        bq769x0_readReg(ctx, BQ769X0_PROTECT3_REG, &protect3, 1);
+    BQ769X0_CHECK_RETVAL(ret);
+    protect3 &= ~(0x3 << 6);
+    protect3 |= (uint8_t)delay << 6;
+    return bq769x0_writeReg(ctx, BQ769X0_PROTECT3_REG, &protect3, 1);
+}
+
 // TODO: Set OCD / SCD threshold
 // TODO: Set OCD / SCD delay
 // TODO: CC settings
-// TODO: Get SYS_STAT
 // TODO: Set DSG_ON
 // TODO: Set CHG_ON
 // TODO: Shutdown
@@ -224,4 +262,65 @@ bq769x0_ErrorCode_t bq769x0_init(
 
     ctx->ready = true;
     return BQ769X0_OK;
+}
+
+/** \brief Handle pending alerts reported by the chip
+ *
+ * Reads the SYS_STAT register, dispatches handling for each active fault
+ * bit and clears the corresponding bits on the chip.
+ *
+ * \param ctx Driver context
+ * \return BQ769X0_OK on success, error code otherwise
+ */
+bq769x0_ErrorCode_t bq769x0_handleAlert(const bq769x0_Ctx_t *ctx) {
+    /* Safety checks*/
+    BQ769X0_CHECK_NULLPTR(ctx);
+    BQ769X0_CHECK_READY(ctx);
+
+    /* Read SYS_STAT register*/
+    uint8_t sysStat;
+    bq769x0_ErrorCode_t ret =
+        bq769x0_readReg(ctx, BQ769X0_SYS_STAT_REG, &sysStat, 1);
+    BQ769X0_CHECK_RETVAL(ret);
+
+    /* Handle each possible alert separately, track what bits need to be
+     * cleared*/
+    uint8_t bitsToClear = 0;
+    for (uint8_t bit = 0; bit < 8; bit++) {
+        if (sysStat & (1 << bit)) {
+            switch (bit) {
+                case BQ769X0_SYS_STAT_OCD_BIT:
+                    // TODO: Handle this
+                    bitsToClear |= (1 << bit);
+                    break;
+                case BQ769X0_SYS_STAT_SCD_BIT:
+                    // TODO: Handle this
+                    bitsToClear |= (1 << bit);
+                    break;
+                case BQ769X0_SYS_STAT_OV_BIT:
+                    // TODO: Handle this
+                    bitsToClear |= (1 << bit);
+                    break;
+                case BQ769X0_SYS_STAT_UV_BIT:
+                    // TODO: Handle this
+                    bitsToClear |= (1 << bit);
+                    break;
+                case BQ769X0_SYS_STAT_OVRD_ALERT_BIT:
+                    // TODO: Handle this
+                    bitsToClear |= (1 << bit);
+                    break;
+                case BQ769X0_SYS_STAT_DEVICE_XREADY_BIT:
+                    // TODO: Handle this
+                    bitsToClear |= (1 << bit);
+                    break;
+                case BQ769X0_SYS_STAT_CC_READY_BIT:
+                    // TODO: Handle this
+                    bitsToClear |= (1 << bit);
+                    break;
+            }
+        }
+    }
+
+    /* Clear the affected bits*/
+    return bq769x0_writeReg(ctx, BQ769X0_SYS_STAT_REG, &bitsToClear, 1);
 }
