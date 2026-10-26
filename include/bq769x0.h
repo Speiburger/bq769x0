@@ -77,7 +77,9 @@ typedef enum {
  * Addresses of the chip registers used by the driver.
  * @{
  */
-#define BQ769X0_SYS_STAT_REG 0x00 /**< System status register*/
+#define BQ769X0_SYS_STAT_REG 0x00  /**< System status register*/
+#define BQ769X0_SYS_CTRL1_REG 0x04 /**< System control register (part 1)*/
+#define BQ769X0_SYS_CTRL2_REG 0x05 /**< System control register (part 2)*/
 #define BQ769X0_PROTECT3_REG \
     0x08 /**< Protection configuration register 3 (OV/UV delay)*/
 #define BQ769X0_OV_TRIP_REG 0x09    /**< Overvoltage trip threshold register*/
@@ -165,5 +167,7 @@ bq769x0_ErrorCode_t bq769x0_init(
 );
 
 bq769x0_ErrorCode_t bq769x0_handleAlert(const bq769x0_Ctx_t *ctx);
+
+bq769x0_ErrorCode_t bq769x0_shutdown(const bq769x0_Ctx_t *ctx);
 
 #endif // BQ769X0_BQ769X0_H

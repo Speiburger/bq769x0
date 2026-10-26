@@ -3,6 +3,28 @@
 //
 #include "bq769x0.h"
 
+/* Private function prototypes*/
+
+static bq769x0_ErrorCode_t bq769x0_readAdcParams(bq769x0_Ctx_t *ctx);
+static bq769x0_ErrorCode_t
+bq769x0_setOvTrip(const bq769x0_Ctx_t *ctx, const uint32_t voltageMV);
+static bq769x0_ErrorCode_t
+bq769x0_setUvTrip(const bq769x0_Ctx_t *ctx, const uint32_t voltageMV);
+static bq769x0_ErrorCode_t
+bq769x0_setOvDelay(const bq769x0_Ctx_t *ctx, bq769x0_OvDelay_t delay);
+static bq769x0_ErrorCode_t
+bq769x0_setUvDelay(const bq769x0_Ctx_t *ctx, bq769x0_UvDelay_t delay);
+static bq769x0_ErrorCode_t bq769x0_setAdc(const bq769x0_Ctx_t *ctx, bool state);
+static bq769x0_ErrorCode_t
+bq769x0_setTempSel(const bq769x0_Ctx_t *ctx, bool state);
+static bq769x0_ErrorCode_t
+bq769x0_setCharge(const bq769x0_Ctx_t *ctx, bool state);
+static bq769x0_ErrorCode_t
+bq769x0_setDischarge(const bq769x0_Ctx_t *ctx, bool state);
+static bq769x0_ErrorCode_t
+bq769x0_setCoulombCounterContinuous(const bq769x0_Ctx_t *ctx, bool state);
+static void modifyBit(uint8_t *byte, const uint8_t mask, const uint8_t overlay);
+
 /* Private helper functions*/
 
 /** \brief Read ADC calibration parameters from the chip
@@ -29,7 +51,7 @@ static bq769x0_ErrorCode_t bq769x0_readAdcParams(bq769x0_Ctx_t *ctx) {
 
     ctx->adcGain = 365;
     ctx->adcGain += ((adcGain1 & 0xc) << 1);
-    ctx->adcGain += ((adcGain2 & 0x60) >> 5);
+    ctx->adcGain += ((adcGain2 & 0xe0) >> 5);
     ctx->adcOffset = (int8_t)adcOffset;
 
     return BQ769X0_OK;
@@ -51,11 +73,11 @@ bq769x0_setOvTrip(const bq769x0_Ctx_t *ctx, const uint32_t voltageMV) {
 
     /* Calculate the value to be written to the register from the raw millivolt
      * value*/
-    const uint16_t ovTripFull =
-        (((long)voltageMV - ctx->adcOffset) * 1000 / ctx->adcGain);
+    const uint32_t ovTripFull =
+        (((uint32_t)voltageMV - ctx->adcOffset) * 1000 / ctx->adcGain);
 
     /* Check if calculated value fits into the register on the chip*/
-    if (ovTripFull > 0x3FF8) {
+    if (ovTripFull > 0x2FF8) {
         return BQ769X0_ERROR;
     }
     if (ovTripFull < 0x2008) {
@@ -118,8 +140,7 @@ bq769x0_setOvDelay(const bq769x0_Ctx_t *ctx, bq769x0_OvDelay_t delay) {
     bq769x0_ErrorCode_t ret =
         bq769x0_readReg(ctx, BQ769X0_PROTECT3_REG, &protect3, 1);
     BQ769X0_CHECK_RETVAL(ret);
-    protect3 &= ~(0x3 << 4);
-    protect3 |= (uint8_t)delay << 4;
+    modifyBit(&protect3, 0x3 << 4, (uint8_t)delay << 4);
     return bq769x0_writeReg(ctx, BQ769X0_PROTECT3_REG, &protect3, 1);
 }
 
@@ -142,18 +163,147 @@ bq769x0_setUvDelay(const bq769x0_Ctx_t *ctx, bq769x0_UvDelay_t delay) {
     bq769x0_ErrorCode_t ret =
         bq769x0_readReg(ctx, BQ769X0_PROTECT3_REG, &protect3, 1);
     BQ769X0_CHECK_RETVAL(ret);
-    protect3 &= ~(0x3 << 6);
-    protect3 |= (uint8_t)delay << 6;
+    modifyBit(&protect3, 0xC0, (uint8_t)delay << 6);
     return bq769x0_writeReg(ctx, BQ769X0_PROTECT3_REG, &protect3, 1);
+}
+
+/** \brief Enable or disable the ADC
+ *
+ * Performs a read-modify-write of the SYS_CTRL1 register to set the ADC_EN
+ * bit.
+ *
+ * \param ctx Driver context
+ * \param state true to enable the ADC, false to disable it
+ * \return BQ769X0_OK on success, error code otherwise
+ */
+static bq769x0_ErrorCode_t
+bq769x0_setAdc(const bq769x0_Ctx_t *ctx, bool state) {
+    /* Null pointer check*/
+    BQ769X0_CHECK_NULLPTR(ctx);
+
+    /* Perform read-modify-write of SYS_CTRL1 register*/
+    uint8_t sysCtrl1;
+    bq769x0_ErrorCode_t ret =
+        bq769x0_readReg(ctx, BQ769X0_SYS_CTRL1_REG, &sysCtrl1, 1);
+    BQ769X0_CHECK_RETVAL(ret);
+    modifyBit(&sysCtrl1, 0x10, (uint8_t)state << 4);
+    return bq769x0_writeReg(ctx, BQ769X0_SYS_CTRL1_REG, &sysCtrl1, 1);
+}
+
+/** \brief Select the temperature sensor source
+ *
+ * Performs a read-modify-write of the SYS_CTRL1 register to set the TEMP_SEL
+ * bit.
+ *
+ * \param ctx Driver context
+ * \param state true to use the external thermistors, false to use the internal
+ * die temperature
+ * \return BQ769X0_OK on success, error code otherwise
+ */
+static bq769x0_ErrorCode_t
+bq769x0_setTempSel(const bq769x0_Ctx_t *ctx, bool state) {
+    /* Null pointer check*/
+    BQ769X0_CHECK_NULLPTR(ctx);
+
+    /* Perform read-modify-write of SYS_CTRL1 register*/
+    uint8_t sysCtrl1;
+    bq769x0_ErrorCode_t ret =
+        bq769x0_readReg(ctx, BQ769X0_SYS_CTRL1_REG, &sysCtrl1, 1);
+    BQ769X0_CHECK_RETVAL(ret);
+    modifyBit(&sysCtrl1, 0x8, (uint8_t)state << 3);
+    return bq769x0_writeReg(ctx, BQ769X0_SYS_CTRL1_REG, &sysCtrl1, 1);
+}
+
+/** \brief Enable or disable the charge FET
+ *
+ * Performs a read-modify-write of the SYS_CTRL2 register to set the CHG_ON
+ * bit.
+ *
+ * \param ctx Driver context
+ * \param state true to turn the charge FET on, false to turn it off
+ * \return BQ769X0_OK on success, error code otherwise
+ */
+static bq769x0_ErrorCode_t
+bq769x0_setCharge(const bq769x0_Ctx_t *ctx, bool state) {
+    /* Null pointer check*/
+    BQ769X0_CHECK_NULLPTR(ctx);
+
+    /* Perform read-modify-write of SYS_CTRL2 register*/
+    uint8_t sysCtrl2;
+    bq769x0_ErrorCode_t ret =
+        bq769x0_readReg(ctx, BQ769X0_SYS_CTRL2_REG, &sysCtrl2, 1);
+    BQ769X0_CHECK_RETVAL(ret);
+    modifyBit(&sysCtrl2, 0x1, (uint8_t)state);
+    return bq769x0_writeReg(ctx, BQ769X0_SYS_CTRL2_REG, &sysCtrl2, 1);
+}
+
+/** \brief Enable or disable the discharge FET
+ *
+ * Performs a read-modify-write of the SYS_CTRL2 register to set the DSG_ON
+ * bit.
+ *
+ * \param ctx Driver context
+ * \param state true to turn the discharge FET on, false to turn it off
+ * \return BQ769X0_OK on success, error code otherwise
+ */
+static bq769x0_ErrorCode_t
+bq769x0_setDischarge(const bq769x0_Ctx_t *ctx, bool state) {
+    /* Null pointer check*/
+    BQ769X0_CHECK_NULLPTR(ctx);
+
+    /* Perform read-modify-write of SYS_CTRL2 register*/
+    uint8_t sysCtrl2;
+    bq769x0_ErrorCode_t ret =
+        bq769x0_readReg(ctx, BQ769X0_SYS_CTRL2_REG, &sysCtrl2, 1);
+    BQ769X0_CHECK_RETVAL(ret);
+    modifyBit(&sysCtrl2, 0x2, (uint8_t)state << 1);
+    return bq769x0_writeReg(ctx, BQ769X0_SYS_CTRL2_REG, &sysCtrl2, 1);
+}
+
+/** \brief Enable or disable continuous coulomb counter operation
+ *
+ * Performs a read-modify-write of the SYS_CTRL2 register to set the CC_EN
+ * bit.
+ *
+ * \param ctx Driver context
+ * \param state true to run the coulomb counter continuously, false to disable
+ * continuous operation
+ * \return BQ769X0_OK on success, error code otherwise
+ */
+static bq769x0_ErrorCode_t
+bq769x0_setCoulombCounterContinuous(const bq769x0_Ctx_t *ctx, bool state) {
+    /* Null pointer check*/
+    BQ769X0_CHECK_NULLPTR(ctx);
+
+    /* Perform read-modify-write of SYS_CTRL2 register*/
+    uint8_t sysCtrl2;
+    bq769x0_ErrorCode_t ret =
+        bq769x0_readReg(ctx, BQ769X0_SYS_CTRL2_REG, &sysCtrl2, 1);
+    BQ769X0_CHECK_RETVAL(ret);
+    modifyBit(&sysCtrl2, 0x40, (uint8_t)state << 6);
+    return bq769x0_writeReg(ctx, BQ769X0_SYS_CTRL2_REG, &sysCtrl2, 1);
+}
+
+/** \brief Modify selected bits of a byte
+ *
+ * Clears all bits selected by the mask and replaces them with the
+ * corresponding bits of the overlay. Bits outside the mask are left untouched.
+ *
+ * \param byte Byte to modify
+ * \param mask Mask selecting the bits to replace
+ * \param overlay New bit values, already shifted to their final position
+ */
+static void
+modifyBit(uint8_t *byte, const uint8_t mask, const uint8_t overlay) {
+    *byte &= ~mask;
+    *byte |= (overlay & mask);
 }
 
 // TODO: Set OCD / SCD threshold
 // TODO: Set OCD / SCD delay
 // TODO: CC settings
-// TODO: Set DSG_ON
-// TODO: Set CHG_ON
-// TODO: Shutdown
 // TODO: Temperature stuff
+// TODO: Cell balancing
 
 /* Public functions*/
 
@@ -253,11 +403,15 @@ bq769x0_ErrorCode_t bq769x0_init(
     ctx->handle       = handle;
     ctx->enPort       = enPort;
     ctx->enPin        = enPin;
+    ctx->ready        = false;
 
     bq769x0_ErrorCode_t ret = ctx->lowLevelInit(ctx->enPort, ctx->enPin);
     BQ769X0_CHECK_RETVAL(ret);
 
     ret = bq769x0_readAdcParams(ctx);
+    BQ769X0_CHECK_RETVAL(ret);
+
+    ret = bq769x0_setAdc(ctx, true);
     BQ769X0_CHECK_RETVAL(ret);
 
     ctx->ready = true;
@@ -321,6 +475,38 @@ bq769x0_ErrorCode_t bq769x0_handleAlert(const bq769x0_Ctx_t *ctx) {
         }
     }
 
+    if (bitsToClear == 0) {
+        return BQ769X0_OK;
+    }
+
     /* Clear the affected bits*/
     return bq769x0_writeReg(ctx, BQ769X0_SYS_STAT_REG, &bitsToClear, 1);
+}
+
+/** \brief Put the chip into shutdown mode
+ *
+ * Performs the two-step write sequence to the SYS_CTRL1 register required to
+ * enter shutdown. The SHUT_A / SHUT_B bits are first set to 01 and then to 10.
+ *
+ * \param ctx Driver context
+ * \return BQ769X0_OK on success, error code otherwise
+ */
+bq769x0_ErrorCode_t bq769x0_shutdown(const bq769x0_Ctx_t *ctx) {
+    /* Safety checks*/
+    BQ769X0_CHECK_NULLPTR(ctx);
+    BQ769X0_CHECK_READY(ctx);
+
+    /* Perform read-modify-write of SYS_CTRL1 register*/
+    uint8_t sysCtrl1;
+    bq769x0_ErrorCode_t ret =
+        bq769x0_readReg(ctx, BQ769X0_SYS_CTRL1_REG, &sysCtrl1, 1);
+    BQ769X0_CHECK_RETVAL(ret);
+    modifyBit(&sysCtrl1, 0x3, 0x1);
+    ret = bq769x0_writeReg(ctx, BQ769X0_SYS_CTRL1_REG, &sysCtrl1, 1);
+    BQ769X0_CHECK_RETVAL(ret);
+
+    ret = bq769x0_readReg(ctx, BQ769X0_SYS_CTRL1_REG, &sysCtrl1, 1);
+    BQ769X0_CHECK_RETVAL(ret);
+    modifyBit(&sysCtrl1, 0x3, 0x2);
+    return bq769x0_writeReg(ctx, BQ769X0_SYS_CTRL1_REG, &sysCtrl1, 1);
 }
